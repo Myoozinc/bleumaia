@@ -71,13 +71,8 @@ export default function VideoStudio({
       return;
     }
 
-    const pConfig = GLOBAL_PROVIDERS.find(p => p.id === provider);
+    // Clave opcional, la app genera de forma automática sin bloquear al usuario
     const apiKey = getStoredApiKey(provider);
-    if (pConfig?.requiresKey && !apiKey.trim()) {
-      setErrorMsg(`El proveedor ${pConfig.name} requiere una API Key configurada.`);
-      openVault();
-      return;
-    }
 
     setIsGenerating(true);
     setErrorMsg(null);

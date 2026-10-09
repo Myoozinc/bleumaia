@@ -96,14 +96,8 @@ export default function ImageStudio({ onSendToVideo, openVault }: ImageStudioPro
       return;
     }
 
-    // Check if key is required
-    const pConfig = GLOBAL_PROVIDERS.find(p => p.id === provider);
+    // Obtiene clave opcional si existe, pero nunca bloquea la generación
     const apiKey = getStoredApiKey(provider);
-    if (pConfig?.requiresKey && !apiKey.trim()) {
-      setErrorMsg(`El proveedor ${pConfig.name} requiere una API Key configurada.`);
-      openVault();
-      return;
-    }
 
     setIsGenerating(true);
     setErrorMsg(null);

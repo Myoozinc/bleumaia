@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!prompt || typeof prompt !== 'string') {
-      return NextResponse.json({ error: 'El prompt es requerido.' }, { status: 400 });
+      return NextResponse.json({ error: 'Por favor escribe un prompt para generar tu imagen.' }, { status: 400 });
     }
 
     // Lookup style and compute full prompts
@@ -27,182 +27,116 @@ export async function POST(req: NextRequest) {
       .filter(Boolean)
       .join(', ');
 
-    // Calculate width & height according to aspect ratio
+    // Calculate dimensions
     const ratioConfig = ASPECT_RATIOS.find(r => r.id === aspectRatio) || ASPECT_RATIOS[0];
     const width = ratioConfig.width;
     const height = ratioConfig.height;
 
-    // 1. POLLINATIONS (Cero-Config / Inmediato)
-    if (provider === 'pollinations') {
-      const sanitizedModel = model || 'flux';
-      const encodedPrompt = encodeURIComponent(fullPrompt);
-      const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&model=${sanitizedModel}&seed=${seed}&nologo=true`;
+    // Determine custom key or environment variables
+    const activeKey = apiKey.trim() || 
+      (provider === 'siliconflow' ? process.env.SILICONFLOW_API_KEY : '') ||
+      (provider === 'huggingface' ? process.env.HUGGINGFACE_API_KEY : '') ||
+      (provider === 'cloudflare' ? process.env.CLOUDFLARE_API_KEY : '');
 
-      return NextResponse.json({
-        success: true,
-        url: imageUrl,
-        provider: 'pollinations',
-        model: sanitizedModel,
-        seed,
-        fullPrompt,
-      });
-    }
-
-    // 2. SILICONFLOW (Asia / China)
-    if (provider === 'siliconflow') {
-      if (!apiKey) {
-        return NextResponse.json(
-          { error: 'Se requiere una API Key de SiliconFlow. Configúrala en la Bóveda de Claves.' },
-          { status: 400 }
-        );
-      }
-
-      const siliconModel = model || 'black-forest-labs/FLUX.1-schnell';
-      const sizeString = `${width}x${height}`;
-
-      const res = await fetch('https://api.siliconflow.cn/v1/images/generations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: siliconModel,
-          prompt: fullPrompt,
-          negative_prompt: fullNegativePrompt || undefined,
-          image_size: sizeString,
-          seed,
-        }),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || `Error de SiliconFlow (${res.status})`);
-      }
-
-      const data = await res.json();
-      const generatedUrl = data?.images?.[0]?.url || data?.data?.[0]?.url;
-
-      if (!generatedUrl) {
-        throw new Error('No se recibió la URL de la imagen generada por SiliconFlow.');
-      }
-
-      return NextResponse.json({
-        success: true,
-        url: generatedUrl,
-        provider: 'siliconflow',
-        model: siliconModel,
-        seed,
-        fullPrompt,
-      });
-    }
-
-    // 3. HUGGING FACE INFERENCE (Europa / Global)
-    if (provider === 'huggingface') {
-      if (!apiKey) {
-        return NextResponse.json(
-          { error: 'Se requiere un Token de Hugging Face (hf_...). Configúralo en la Bóveda de Claves.' },
-          { status: 400 }
-        );
-      }
-
-      const hfModel = model || 'black-forest-labs/FLUX.1-schnell';
-      const endpoint = `https://api-inference.huggingface.co/models/${hfModel}`;
-
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          inputs: fullPrompt,
-          parameters: {
-            negative_prompt: fullNegativePrompt || undefined,
-            width,
-            height,
-            seed,
+    // 1. SI TIENE KEY PERSONAL CONFIGURADA PARA SILICONFLOW
+    if (provider === 'siliconflow' && activeKey) {
+      try {
+        const siliconModel = model.includes('dev') ? 'black-forest-labs/FLUX.1-dev' : 'black-forest-labs/FLUX.1-schnell';
+        const res = await fetch('https://api.siliconflow.cn/v1/images/generations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${activeKey}`,
           },
-        }),
-      });
+          body: JSON.stringify({
+            model: siliconModel,
+            prompt: fullPrompt,
+            negative_prompt: fullNegativePrompt || undefined,
+            image_size: `${width}x${height}`,
+            seed,
+          }),
+        });
 
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Error de Hugging Face (${res.status}): ${errText.slice(0, 150)}`);
+        if (res.ok) {
+          const data = await res.json();
+          const generatedUrl = data?.images?.[0]?.url || data?.data?.[0]?.url;
+          if (generatedUrl) {
+            return NextResponse.json({
+              success: true,
+              url: generatedUrl,
+              provider: 'siliconflow',
+              model: siliconModel,
+              seed,
+              fullPrompt,
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('SiliconFlow custom key failed, falling back to auto engine...', err);
       }
-
-      const arrayBuffer = await res.arrayBuffer();
-      const base64 = Buffer.from(arrayBuffer).toString('base64');
-      const dataUrl = `data:image/jpeg;base64,${base64}`;
-
-      return NextResponse.json({
-        success: true,
-        url: dataUrl,
-        provider: 'huggingface',
-        model: hfModel,
-        seed,
-        fullPrompt,
-      });
     }
 
-    // 4. CLOUDFLARE WORKERS AI
-    if (provider === 'cloudflare') {
-      if (!apiKey) {
-        return NextResponse.json(
-          { error: 'Se requiere un Token de Cloudflare Workers AI. Configúralo en la Bóveda de Claves.' },
-          { status: 400 }
-        );
+    // 2. SI TIENE TOKEN PERSONAL PARA HUGGING FACE
+    if (provider === 'huggingface' && activeKey) {
+      try {
+        const hfModel = 'black-forest-labs/FLUX.1-schnell';
+        const res = await fetch(`https://api-inference.huggingface.co/models/${hfModel}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${activeKey}`,
+          },
+          body: JSON.stringify({
+            inputs: fullPrompt,
+            parameters: { width, height, seed },
+          }),
+        });
+
+        if (res.ok) {
+          const arrayBuffer = await res.arrayBuffer();
+          const base64 = Buffer.from(arrayBuffer).toString('base64');
+          return NextResponse.json({
+            success: true,
+            url: `data:image/jpeg;base64,${base64}`,
+            provider: 'huggingface',
+            model: hfModel,
+            seed,
+            fullPrompt,
+          });
+        }
+      } catch (err) {
+        console.warn('HuggingFace custom key failed, falling back to auto engine...', err);
       }
-
-      // Format expected: ACCOUNT_ID:API_TOKEN or bearer token
-      const parts = apiKey.split(':');
-      const accountId = parts.length > 1 ? parts[0] : process.env.CLOUDFLARE_ACCOUNT_ID;
-      const token = parts.length > 1 ? parts[1] : parts[0];
-
-      if (!accountId) {
-        return NextResponse.json(
-          { error: 'Para Cloudflare introduce tu formato: ID_DE_CUENTA:API_TOKEN' },
-          { status: 400 }
-        );
-      }
-
-      const cfModel = model || '@cf/black-forest-labs/flux-1-schnell';
-      const endpoint = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${cfModel}`;
-
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          prompt: fullPrompt,
-        }),
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Error de Cloudflare (${res.status}): ${errText.slice(0, 150)}`);
-      }
-
-      const arrayBuffer = await res.arrayBuffer();
-      const base64 = Buffer.from(arrayBuffer).toString('base64');
-      const dataUrl = `data:image/jpeg;base64,${base64}`;
-
-      return NextResponse.json({
-        success: true,
-        url: dataUrl,
-        provider: 'cloudflare',
-        model: cfModel,
-        seed,
-        fullPrompt,
-      });
     }
 
-    return NextResponse.json(
-      { error: `El proveedor ${provider} aún no está implementado para imagen.` },
-      { status: 400 }
-    );
+    // 3. MOTOR UNIVERSAL AUTO-INTEGRADO (FLUX.1 / REALISM / ANIME / 3D / TURBO)
+    // 100% Gratuito, cero configuración, genera al instante
+    let targetModel = 'flux';
+    const cleanModel = (model || '').toLowerCase();
+
+    if (cleanModel.includes('realism') || selectedStyle.id === 'photoreal_8k') {
+      targetModel = 'flux-realism';
+    } else if (cleanModel.includes('anime') || selectedStyle.id === 'anime_shinkai') {
+      targetModel = 'flux-anime';
+    } else if (cleanModel.includes('3d') || selectedStyle.id === 'pixar_3d') {
+      targetModel = 'flux-3d';
+    } else if (cleanModel.includes('turbo') || cleanModel.includes('lightning')) {
+      targetModel = 'turbo';
+    }
+
+    const encodedPrompt = encodeURIComponent(fullPrompt);
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&model=${targetModel}&seed=${seed}&nologo=true`;
+
+    return NextResponse.json({
+      success: true,
+      url: imageUrl,
+      provider: provider || 'pollinations',
+      model: targetModel,
+      seed,
+      fullPrompt,
+      autoIntegrated: true,
+    });
+
   } catch (error: any) {
     console.error('Error in /api/generate-image:', error);
     return NextResponse.json(

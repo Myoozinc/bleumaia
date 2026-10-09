@@ -67,13 +67,13 @@ export default function ApiKeyVaultModal({
             </div>
             <div>
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                Bóveda Global de API Keys
+                Motores de IA Globales
                 <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/80">
-                  Privacidad 100% Local
+                  100% Automático & Gratis
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
-                Tus claves se guardan únicamente en el navegador de tu dispositivo. No pasan por servidores intermediarios.
+                Bleumaia ya tiene todos los modelos integrados para generar al instante sin pedirte nada.
               </p>
             </div>
           </div>
@@ -87,14 +87,14 @@ export default function ApiKeyVaultModal({
 
         {/* Content list */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          <div className="p-3.5 rounded-xl bg-cyan-950/40 border border-cyan-800/40 flex items-start gap-3 text-xs text-cyan-200">
-            <Sparkles className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+          <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-800/40 flex items-start gap-3 text-xs text-emerald-200">
+            <Sparkles className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold text-cyan-100 mb-0.5">
-                Acceso Instantáneo sin configuración
+              <p className="font-semibold text-emerald-100 mb-0.5">
+                ¡Todo está listo y funcionando de forma automática!
               </p>
-              <p className="text-slate-300">
-                Bleumaia incluye <strong>Pollinations.ai</strong> activo por defecto para que generes imágenes (FLUX, Anime, Realismo) y videos sin necesidad de crear cuentas ni colocar tarjetas. Si deseas desbloquear modelos avanzados (Alibaba Wan 2.1, CogVideoX, SD 3.5), añade tus claves abajo.
+              <p className="text-slate-300 leading-relaxed">
+                No necesitas configurar ni copiar ninguna clave para usar Bleumaia. El sistema enruta tus solicitudes a modelos globales gratuitos de forma instantánea. Este panel es solo para usuarios avanzados que deseen conectar sus propias claves privadas dedicadas.
               </p>
             </div>
           </div>

@@ -87,9 +87,9 @@ export default function Header({
             title="Administrar API Keys Globales"
           >
             <KeyRound className="w-3.5 h-3.5 text-cyan-400 group-hover:rotate-45 transition-transform" />
-            <span className="font-medium hidden md:inline">Bóveda de APIs</span>
-            <span className="flex items-center justify-center px-1.5 py-0.2 rounded-full text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-800/80 font-bold">
-              {configuredKeysCount > 0 ? `${configuredKeysCount} Keys` : 'Libre'}
+            <span className="font-medium hidden md:inline">Motores de IA</span>
+            <span className="flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800/80 font-bold">
+              Auto Gratis
             </span>
           </button>
 
