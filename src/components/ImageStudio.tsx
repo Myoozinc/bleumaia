@@ -40,6 +40,8 @@ export default function ImageStudio({ onSendToVideo, openVault }: ImageStudioPro
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [currentAsset, setCurrentAsset] = useState<GeneratedAsset | null>(null);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
 
   // Randomize Seed
@@ -137,6 +139,8 @@ export default function ImageStudio({ onSendToVideo, openVault }: ImageStudioPro
         createdAt: Date.now(),
       };
 
+      setImageLoaded(false);
+      setImageError(false);
       setCurrentAsset(newAsset);
       saveToHistory(newAsset);
     } catch (err: any) {
@@ -426,12 +430,39 @@ export default function ImageStudio({ onSendToVideo, openVault }: ImageStudioPro
                 </div>
               </div>
             ) : currentAsset ? (
-              <div className="relative w-full h-full flex items-center justify-center">
-                <img
-                  src={currentAsset.url}
-                  alt={currentAsset.prompt}
-                  className="max-h-[450px] w-auto max-w-full rounded-lg object-contain shadow-2xl transition-transform duration-300 group-hover:scale-[1.01]"
-                />
+              <div className="relative w-full h-full min-h-[300px] flex items-center justify-center p-2">
+                {!imageLoaded && !imageError && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center space-y-2 bg-slate-950/80">
+                    <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-[11px] text-slate-400">Decodificando imagen en alta fidelidad...</span>
+                  </div>
+                )}
+
+                {imageError ? (
+                  <div className="flex flex-col items-center justify-center p-6 text-center space-y-3">
+                    <AlertCircle className="w-10 h-10 text-amber-400" />
+                    <p className="text-xs text-slate-200 font-semibold">
+                      El servidor tardó en responder. Pulsa reintentar para generar con el clúster de respaldo.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handleGenerate()}
+                      className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition-all shadow-md shadow-cyan-600/30"
+                    >
+                      Reintentar Generación
+                    </button>
+                  </div>
+                ) : (
+                  <img
+                    src={currentAsset.url}
+                    alt={currentAsset.prompt}
+                    onLoad={() => setImageLoaded(true)}
+                    onError={() => setImageError(true)}
+                    className={`max-h-[450px] w-auto max-w-full rounded-lg object-contain shadow-2xl transition-all duration-300 group-hover:scale-[1.01] ${
+                      imageLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+                    }`}
+                  />
+                )}
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center p-8 text-center text-slate-500 space-y-3">

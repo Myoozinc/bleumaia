@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ASPECT_RATIOS, STYLE_PRESETS } from '@/lib/styles';
 import { AspectRatio, ProviderId } from '@/lib/types';
 
+export const maxDuration = 60; // Allow up to 60 seconds on Vercel
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -27,22 +29,32 @@ export async function POST(req: NextRequest) {
       .filter(Boolean)
       .join(', ');
 
-    // Calculate dimensions
-    const ratioConfig = ASPECT_RATIOS.find(r => r.id === aspectRatio) || ASPECT_RATIOS[0];
-    const width = ratioConfig.width;
-    const height = ratioConfig.height;
+    // Normalize dimensions to optimal FLUX/SDXL latents (multiples of 64)
+    let width = 1024;
+    let height = 1024;
+    if (aspectRatio === '16:9') {
+      width = 1024;
+      height = 576;
+    } else if (aspectRatio === '9:16') {
+      width = 576;
+      height = 1024;
+    } else if (aspectRatio === '4:3') {
+      width = 1024;
+      height = 768;
+    } else if (aspectRatio === '21:9') {
+      width = 1024;
+      height = 448;
+    }
 
-    // Determine custom key or environment variables
     const activeKey = apiKey.trim() || 
       (provider === 'siliconflow' ? process.env.SILICONFLOW_API_KEY : '') ||
-      (provider === 'huggingface' ? process.env.HUGGINGFACE_API_KEY : '') ||
-      (provider === 'cloudflare' ? process.env.CLOUDFLARE_API_KEY : '');
+      (provider === 'huggingface' ? process.env.HUGGINGFACE_API_KEY : '');
 
-    // 1. SI TIENE KEY PERSONAL CONFIGURADA PARA SILICONFLOW
+    // 1. SI EL USUARIO INTRODUCE SU CLAVE PERSONAL DE SILICONFLOW
     if (provider === 'siliconflow' && activeKey) {
       try {
-        const siliconModel = model.includes('dev') ? 'black-forest-labs/FLUX.1-dev' : 'black-forest-labs/FLUX.1-schnell';
-        const res = await fetch('https://api.siliconflow.cn/v1/images/generations', {
+        const siliconModel = 'black-forest-labs/FLUX.1-schnell';
+        const sfRes = await fetch('https://api.siliconflow.cn/v1/images/generations', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -57,90 +69,94 @@ export async function POST(req: NextRequest) {
           }),
         });
 
-        if (res.ok) {
-          const data = await res.json();
-          const generatedUrl = data?.images?.[0]?.url || data?.data?.[0]?.url;
-          if (generatedUrl) {
-            return NextResponse.json({
-              success: true,
-              url: generatedUrl,
-              provider: 'siliconflow',
-              model: siliconModel,
-              seed,
-              fullPrompt,
-            });
+        if (sfRes.ok) {
+          const sfData = await sfRes.json();
+          const imgUrl = sfData?.images?.[0]?.url || sfData?.data?.[0]?.url;
+          if (imgUrl) {
+            // Fetch image and return as data URL to prevent CORS/broken links
+            const imgRes = await fetch(imgUrl);
+            if (imgRes.ok) {
+              const buf = await imgRes.arrayBuffer();
+              const b64 = Buffer.from(buf).toString('base64');
+              return NextResponse.json({
+                success: true,
+                url: `data:image/jpeg;base64,${b64}`,
+                provider: 'siliconflow',
+                model: siliconModel,
+                seed,
+                fullPrompt,
+              });
+            }
           }
         }
       } catch (err) {
-        console.warn('SiliconFlow custom key failed, falling back to auto engine...', err);
+        console.warn('SiliconFlow personal key failed, continuing to auto cascade...', err);
       }
     }
 
-    // 2. SI TIENE TOKEN PERSONAL PARA HUGGING FACE
-    if (provider === 'huggingface' && activeKey) {
-      try {
-        const hfModel = 'black-forest-labs/FLUX.1-schnell';
-        const res = await fetch(`https://api-inference.huggingface.co/models/${hfModel}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${activeKey}`,
-          },
-          body: JSON.stringify({
-            inputs: fullPrompt,
-            parameters: { width, height, seed },
-          }),
-        });
+    // 2. MOTOR UNIVERSAL AUTO-INTEGRADO CON CASCADA INTELIGENTE
+    // Probamos 'flux' (FLUX.1 Schnell) y luego 'turbo' si hay saturación
+    const modelsToTry = ['flux', 'turbo'];
 
-        if (res.ok) {
-          const arrayBuffer = await res.arrayBuffer();
+    for (const modelCandidate of modelsToTry) {
+      try {
+        const encodedPrompt = encodeURIComponent(fullPrompt);
+        const candidateUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&model=${modelCandidate}&seed=${seed}&nologo=true`;
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 28000); // 28s timeout
+
+        const response = await fetch(candidateUrl, {
+          signal: controller.signal,
+          headers: {
+            Accept: 'image/jpeg, image/png, image/*',
+          },
+        });
+        clearTimeout(timeoutId);
+
+        const contentType = response.headers.get('content-type') || '';
+
+        // Si el endpoint devuelve una imagen real con 200 OK
+        if (response.ok && contentType.startsWith('image/')) {
+          const arrayBuffer = await response.arrayBuffer();
           const base64 = Buffer.from(arrayBuffer).toString('base64');
+          const dataUrl = `data:${contentType};base64,${base64}`;
+
           return NextResponse.json({
             success: true,
-            url: `data:image/jpeg;base64,${base64}`,
-            provider: 'huggingface',
-            model: hfModel,
+            url: dataUrl,
+            provider: 'pollinations',
+            model: modelCandidate,
             seed,
             fullPrompt,
+            autoIntegrated: true,
           });
+        } else {
+          console.warn(`Model ${modelCandidate} returned status ${response.status} (${contentType}), trying next...`);
         }
       } catch (err) {
-        console.warn('HuggingFace custom key failed, falling back to auto engine...', err);
+        console.warn(`Attempt with ${modelCandidate} encountered error, trying next candidate...`, err);
       }
     }
 
-    // 3. MOTOR UNIVERSAL AUTO-INTEGRADO (FLUX.1 / REALISM / ANIME / 3D / TURBO)
-    // 100% Gratuito, cero configuración, genera al instante
-    let targetModel = 'flux';
-    const cleanModel = (model || '').toLowerCase();
-
-    if (cleanModel.includes('realism') || selectedStyle.id === 'photoreal_8k') {
-      targetModel = 'flux-realism';
-    } else if (cleanModel.includes('anime') || selectedStyle.id === 'anime_shinkai') {
-      targetModel = 'flux-anime';
-    } else if (cleanModel.includes('3d') || selectedStyle.id === 'pixar_3d') {
-      targetModel = 'flux-3d';
-    } else if (cleanModel.includes('turbo') || cleanModel.includes('lightning')) {
-      targetModel = 'turbo';
-    }
-
-    const encodedPrompt = encodeURIComponent(fullPrompt);
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&model=${targetModel}&seed=${seed}&nologo=true`;
+    // Si ambos fallaron por timeout de red extrema, retornamos URL directa de respaldo
+    const fallbackEncoded = encodeURIComponent(fullPrompt);
+    const directFallbackUrl = `https://image.pollinations.ai/prompt/${fallbackEncoded}?width=${width}&height=${height}&model=flux&seed=${seed}&nologo=true`;
 
     return NextResponse.json({
       success: true,
-      url: imageUrl,
-      provider: provider || 'pollinations',
-      model: targetModel,
+      url: directFallbackUrl,
+      provider: 'pollinations',
+      model: 'flux',
       seed,
       fullPrompt,
-      autoIntegrated: true,
+      fallback: true,
     });
 
   } catch (error: any) {
     console.error('Error in /api/generate-image:', error);
     return NextResponse.json(
-      { error: error?.message || 'Error al generar la imagen.' },
+      { error: error?.message || 'Error al procesar la generación de imagen.' },
       { status: 500 }
     );
   }
