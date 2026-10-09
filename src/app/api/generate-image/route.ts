@@ -48,7 +48,50 @@ export async function POST(req: NextRequest) {
 
     const activeKey = apiKey.trim() || 
       (provider === 'siliconflow' ? process.env.SILICONFLOW_API_KEY : '') ||
-      (provider === 'huggingface' ? process.env.HUGGINGFACE_API_KEY : '');
+      (provider === 'huggingface' ? process.env.HUGGINGFACE_API_KEY : '') ||
+      (provider === 'nano_banana' || provider === 'gemini' ? (process.env.NANO_BANANA_API_KEY || process.env.GEMINI_API_KEY || '') : '');
+
+    // 0. NANO BANANA (GOOGLE AI STUDIO / GEMINI IMAGEN)
+    if ((provider === 'nano_banana' || provider === 'gemini') && activeKey) {
+      try {
+        const googleRatio = aspectRatio === '16:9' ? '16:9' : aspectRatio === '9:16' ? '9:16' : aspectRatio === '4:3' ? '4:3' : '1:1';
+        const imagenUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${activeKey}`;
+
+        const imgRes = await fetch(imagenUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': activeKey,
+          },
+          body: JSON.stringify({
+            instances: [{ prompt: fullPrompt }],
+            parameters: {
+              sampleCount: 1,
+              aspectRatio: googleRatio,
+              outputMimeType: 'image/jpeg',
+            },
+          }),
+        });
+
+        if (imgRes.ok) {
+          const imgData = await imgRes.json();
+          const b64 = imgData?.predictions?.[0]?.bytesBase64Encoded;
+          if (b64) {
+            return NextResponse.json({
+              success: true,
+              url: `data:image/jpeg;base64,${b64}`,
+              provider: 'nano_banana',
+              model: model || 'nano-banana-2.1',
+              seed,
+              fullPrompt,
+              autoIntegrated: true,
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Nano Banana predict error, continuing to cascade...', err);
+      }
+    }
 
     // 1. SI EL USUARIO INTRODUCE SU CLAVE PERSONAL DE SILICONFLOW
     if (provider === 'siliconflow' && activeKey) {

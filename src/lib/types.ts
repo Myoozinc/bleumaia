@@ -1,9 +1,10 @@
 export type ProviderId = 
   | 'pollinations'
+  | 'nano_banana'
+  | 'gemini'
   | 'siliconflow'
   | 'huggingface'
   | 'cloudflare'
-  | 'gemini'
   | 'zhipu'
   | 'dashscope';
 

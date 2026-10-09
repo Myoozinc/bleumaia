@@ -13,7 +13,10 @@ Translate the user prompt (if in Spanish or other language) to English and expan
 Tone: ${tone}. Include cinematic lighting, camera lens details, textures and atmosphere.
 OUTPUT ONLY the enhanced prompt. No commentary, no quotes.`;
 
-    const activeGeminiKey = geminiKey.trim() || process.env.GEMINI_API_KEY || '';
+    const activeGeminiKey = geminiKey.trim() || 
+      process.env.GEMINI_API_KEY || 
+      process.env.NANO_BANANA_API_KEY || 
+      '';
     const activeSiliconKey = siliconKey.trim() || process.env.SILICONFLOW_API_KEY || '';
 
     // 1. If Gemini key provided
@@ -23,7 +26,10 @@ OUTPUT ONLY the enhanced prompt. No commentary, no quotes.`;
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${activeGeminiKey}`,
           {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'x-goog-api-key': activeGeminiKey,
+            },
             body: JSON.stringify({
               contents: [{ role: 'user', parts: [{ text: `${systemInstruction}\n\nPrompt: "${prompt}"` }] }],
             }),

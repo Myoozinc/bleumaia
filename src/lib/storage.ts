@@ -23,10 +23,11 @@ export function getAllStoredApiKeys(): Record<ProviderId, string> {
   
   const providers: ProviderId[] = [
     'pollinations',
+    'nano_banana',
+    'gemini',
     'siliconflow',
     'huggingface',
     'cloudflare',
-    'gemini',
     'zhipu',
     'dashscope'
   ];

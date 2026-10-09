@@ -22,6 +22,24 @@ export const GLOBAL_PROVIDERS: ProviderConfig[] = [
     },
   },
   {
+    id: 'nano_banana',
+    name: '🍌 Nano Banana (Google AI Studio)',
+    flag: '🍌',
+    region: 'Google DeepMind / Gemini Architecture',
+    requiresKey: false,
+    freeTierDescription: 'Modelos Nano Banana 2.1 & Pro de Google integrados con tu API Key.',
+    signupUrl: 'https://aistudio.google.com/api-keys',
+    supportedTypes: ['image', 'text'],
+    models: {
+      image: [
+        'nano-banana-2.1 (Ultra Rápido & Creativo)',
+        'nano-banana-pro (Máxima Fidelidad Visual)',
+        'imagen-3.0-generate-002 (Google Imagen 3)',
+      ],
+      text: ['gemini-2.0-flash'],
+    },
+  },
+  {
     id: 'siliconflow',
     name: 'SiliconFlow (Asia / Wan 2.1 & DeepSeek)',
     flag: '🇨🇳',
