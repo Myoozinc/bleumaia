@@ -17,11 +17,13 @@ import {
 import { MotionPreset, ProviderId, GeneratedAsset } from '@/lib/types';
 import { GLOBAL_PROVIDERS } from '@/lib/providers';
 import { getStoredApiKey, saveToHistory } from '@/lib/storage';
+import { useAuth } from '@/context/AuthContext';
 
 interface VideoStudioProps {
   initialImage?: string;
   initialPrompt?: string;
   openVault: () => void;
+  openPricing?: () => void;
 }
 
 const MOTION_OPTIONS: { id: MotionPreset; label: string; icon: string; desc: string }[] = [
@@ -39,7 +41,9 @@ export default function VideoStudio({
   initialImage,
   initialPrompt,
   openVault,
+  openPricing,
 }: VideoStudioProps) {
+  const { consumeCredit } = useAuth();
   const [mode, setMode] = useState<'text' | 'image'>(initialImage ? 'image' : 'text');
   const [prompt, setPrompt] = useState(initialPrompt || '');
   const [imageUrl, setImageUrl] = useState<string | null>(initialImage || null);
@@ -68,6 +72,14 @@ export default function VideoStudio({
     }
     if (mode === 'image' && !imageUrl) {
       setErrorMsg('Por favor proporciona una imagen inicial para animar.');
+      return;
+    }
+
+    // Verificar saldo de créditos para video (2 créditos)
+    const hasCredit = await consumeCredit(2);
+    if (!hasCredit) {
+      setErrorMsg('Te has quedado sin créditos. Los videos requieren 2 créditos. Recarga con PayPal o activa el Plan PRO.');
+      if (openPricing) openPricing();
       return;
     }
 

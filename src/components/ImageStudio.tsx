@@ -20,13 +20,16 @@ import { STYLE_PRESETS, ASPECT_RATIOS } from '@/lib/styles';
 import { GLOBAL_PROVIDERS } from '@/lib/providers';
 import { AspectRatio, GeneratedAsset, ProviderId } from '@/lib/types';
 import { getStoredApiKey, saveToHistory } from '@/lib/storage';
+import { useAuth } from '@/context/AuthContext';
 
 interface ImageStudioProps {
   onSendToVideo: (imageUrl: string, prompt: string) => void;
   openVault: () => void;
+  openPricing?: () => void;
 }
 
-export default function ImageStudio({ onSendToVideo, openVault }: ImageStudioProps) {
+export default function ImageStudio({ onSendToVideo, openVault, openPricing }: ImageStudioProps) {
+  const { consumeCredit, profile } = useAuth();
   const [prompt, setPrompt] = useState('');
   const [negativePrompt, setNegativePrompt] = useState('');
   const [showNegative, setShowNegative] = useState(false);
@@ -95,6 +98,14 @@ export default function ImageStudio({ onSendToVideo, openVault }: ImageStudioPro
     if (e) e.preventDefault();
     if (!prompt.trim()) {
       setErrorMsg('Por favor escribe una descripción para tu imagen.');
+      return;
+    }
+
+    // Verificar saldo de créditos o suscripción activa
+    const hasCredit = await consumeCredit(1);
+    if (!hasCredit) {
+      setErrorMsg('Te has quedado sin créditos. Recarga saldo con PayPal o activa tu suscripción PRO para generar sin límites.');
+      if (openPricing) openPricing();
       return;
     }
 
